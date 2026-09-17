@@ -27,8 +27,17 @@ tasks.register('run', JavaExec) {
     dependsOn testClasses
     classpath = sourceSets.main.output + sourceSets.test.output + configurations.launcher
     mainClass = 'com.shopsalevalue.ShopSaleValueLauncher'
-    jvmArgs '-ea'
-    args '--developer-mode'
+    def devHome = new File(rootProject.projectDir.parentFile, 'ShopSaleValue-DevProfile')
+    jvmArgs '-ea', "-Duser.home=${devHome.absolutePath}", "-Dshopsalevalue.devHome=${devHome.absolutePath}"
+    args '--developer-mode', '--disable-telemetry'
+    environment = environment.findAll { key, value ->
+        def name = key.toUpperCase(Locale.ROOT)
+        !name.startsWith('JX_') && !(name in ['JAVA_TOOL_OPTIONS', '_JAVA_OPTIONS', 'JDK_JAVA_OPTIONS', 'CLASSPATH'])
+    }
+    doFirst {
+        devHome.mkdirs()
+        new File(devHome, '.shopsalevalue-isolated-home').text = 'Dedicated Shop Sale Value development home.\n'
+    }
 }
 tasks.register('launcherJar', Jar) {
     dependsOn testClasses

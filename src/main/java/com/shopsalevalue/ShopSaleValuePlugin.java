@@ -8,6 +8,7 @@ import net.runelite.api.*;
 import net.runelite.api.events.*;
 import net.runelite.api.gameval.InterfaceID;
 import net.runelite.api.widgets.Widget;
+import net.runelite.api.widgets.WidgetInfo;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.eventbus.Subscribe;
 import net.runelite.client.game.ItemManager;
@@ -70,7 +71,7 @@ public class ShopSaleValuePlugin extends Plugin
             if (args != null && args.length > 2 && args[2] instanceof String)
                 title = Text.removeTags((String) args[2]);
             if (args != null && args.length > 3 && args[3] instanceof Integer)
-                currency = (Integer) args[3];
+                currency = (Integer) args[3] == -1 ? net.runelite.api.gameval.ItemID.COINS : (Integer) args[3];
         }
     }
 
@@ -100,7 +101,7 @@ public class ShopSaleValuePlugin extends Plugin
         Widget[] children = client.getWidget(InterfaceID.Shopmain.ITEMS).getChildren();
         if (children != null) for (Widget w : children)
         {
-            if (w == null || w.getItemId() < 0) continue;
+            if (w == null || w.getItemId() <= 0 || w.isHidden()) continue;
             int id = canonical(w.getItemId());
             stock.merge(id, Math.max(0, w.getItemQuantity()), (a,b) -> (int)Math.min(Integer.MAX_VALUE, (long)a+b));
             stockNames.add(items.getItemComposition(id).getName());
@@ -150,7 +151,7 @@ public class ShopSaleValuePlugin extends Plugin
             problem = "Item cannot normally be sold";
         if (current < baseline && rule != null && rule.decrease > 0)
             problem = "Below normal stock: check Value";
-        if (!stock.containsKey(item.getId()) && stockNames.size() >= 40)
+        if (!stock.containsKey(item.getId()) && stock.values().stream().filter(quantity -> quantity > 0).count() >= 40)
             problem = "Shop may be full: check Value";
         if (rule == null && problem == null) problem = "No pricing rule";
         Quote result = new Quote(item.getName(), title, ruleName, problem, item.getPrice(), current,
@@ -207,4 +208,28 @@ public class ShopSaleValuePlugin extends Plugin
     }
 
     Quote selectedQuote() { return quote(selectedId); }
+
+    @Subscribe public void onMenuOptionClicked(MenuOptionClicked event)
+    {
+        if (!config.ctrlLookup() || !client.isKeyPressed(KeyCode.KC_CONTROL)
+            || client.getGameState() != GameState.LOGGED_IN) return;
+        if (event.getParam1() != WidgetInfo.INVENTORY.getId()
+            && event.getParam1() != InterfaceID.Shopside.ITEMS) return;
+        if (event.getItemId() < 0) return;
+        // Consume the original inventory action before it can use, equip, drop or sell.
+        event.consume();
+        ItemComposition item = items.getItemComposition(canonical(event.getItemId()));
+        String message;
+        if (!item.isTradeable() || item.getId() == net.runelite.api.gameval.ItemID.COINS)
+            message = item.getName() + ": cannot normally be sold to a general store.";
+        else
+        {
+            Pricing.Rule normal = new Pricing.Rule(4000, 300, 1000);
+            message = String.format(Locale.US,
+                "%s: normal general store, no excess stock: %,d gp each initially (40%%); minimum %,d gp each (10%%). Actual price depends on stock.",
+                item.getName(), Pricing.unit(item.getPrice(), 0, normal),
+                Pricing.unit(item.getPrice(), 10, normal));
+        }
+        client.addChatMessage(ChatMessageType.GAMEMESSAGE, "", "Shop Sale Value: " + message, null);
+    }
 }

@@ -51,6 +51,38 @@ public class ShopSaleValuePluginTest
         when(plugin.client.getItemContainer(InventoryID.INVENTORY)).thenReturn(inv);
         plugin.startUp();
     }
+    private void openWithCurrency(int currency)
+    {
+        ScriptEvent script = mock(ScriptEvent.class);
+        when(script.getArguments()).thenReturn(new Object[]{1074, 4, "Lumbridge General Store", currency, 1, false});
+        ScriptPreFired event = mock(ScriptPreFired.class);
+        when(event.getScriptId()).thenReturn(1074);
+        when(event.getScriptEvent()).thenReturn(script);
+        plugin.onScriptPreFired(event);
+    }
+    @Test public void defaultCurrencyAllowsMenuAndItemLabel()
+    {
+        openWithCurrency(-1);
+        MenuEntry menu = entry("Sell 5");
+        plugin.onMenuEntryAdded(new MenuEntryAdded(menu));
+        assertTrue(menu.getTarget().contains("84 gp [16 avg ea]"));
+        assertNull(plugin.quote(55).problem);
+        net.runelite.api.widgets.WidgetItem widgetItem = mock(net.runelite.api.widgets.WidgetItem.class);
+        when(widgetItem.getCanvasBounds()).thenReturn(new Rectangle(4,4,32,32));
+        Graphics2D graphics = mock(Graphics2D.class);
+        when(graphics.create()).thenReturn(graphics);
+        new ShopSaleValueOverlay(plugin, config).renderItemOverlay(graphics, 55, widgetItem);
+        verify(graphics).setColor(Color.WHITE);
+        verify(graphics).drawString("20gp", 4, 13);
+    }
+    @Test public void explicitNonCoinCurrencyRemainsUnsupported()
+    {
+        openWithCurrency(6529);
+        assertEquals("Non-coin shop is not supported", plugin.quote(55).problem);
+        MenuEntry menu = entry("Sell 5");
+        plugin.onMenuEntryAdded(new MenuEntryAdded(menu));
+        assertFalse(menu.getTarget().contains("gp"));
+    }
     private MenuEntry entry(String option)
     {
         MenuEntry entry = mock(MenuEntry.class);
@@ -62,11 +94,32 @@ public class ShopSaleValuePluginTest
         when(entry.getOption()).thenReturn(option);
         return entry;
     }
+    @Test public void controlLookupConsumesActionAndPricesNotesWithoutShop()
+    {
+        when(plugin.client.getWidget(InterfaceID.Shopmain.ITEMS)).thenReturn(null);
+        when(plugin.client.isKeyPressed(KeyCode.KC_CONTROL)).thenReturn(true);
+        MenuOptionClicked event = mock(MenuOptionClicked.class);
+        when(event.getParam1()).thenReturn(net.runelite.api.widgets.WidgetInfo.INVENTORY.getId());
+        when(event.getItemId()).thenReturn(55);
+        plugin.onMenuOptionClicked(event);
+        verify(event).consume();
+        verify(plugin.client).addChatMessage(eq(ChatMessageType.GAMEMESSAGE), eq(""),
+            contains("Oak shortbow (u): normal general store, no excess stock: 20 gp each initially (40%); minimum 5 gp each"), isNull());
+    }
+    @Test public void ordinaryClickIsUnchanged()
+    {
+        MenuOptionClicked event = mock(MenuOptionClicked.class);
+        when(event.getParam1()).thenReturn(net.runelite.api.widgets.WidgetInfo.INVENTORY.getId());
+        when(event.getItemId()).thenReturn(55);
+        plugin.onMenuOptionClicked(event);
+        verify(event, never()).consume();
+        verify(plugin.client, never()).addChatMessage(any(), anyString(), anyString(), any());
+    }
     @Test public void menuTotalsCapToInventoryAndDoNotChangeAction()
     {
         MenuEntry entry = entry("Sell 50");
         plugin.onMenuEntryAdded(new MenuEntryAdded(entry));
-        assertTrue(entry.getTarget().contains("220 gp [7.86 ea] (28 items)"));
+        assertTrue(entry.getTarget().contains("220 gp [7 avg ea] (28 items)"));
         verify(entry,never()).setOption(anyString());
         verify(entry,never()).setIdentifier(anyInt());
         verify(entry,never()).setType(any());
@@ -106,22 +159,20 @@ public class ShopSaleValuePluginTest
         plugin.onGameStateChanged(event);
         assertNull(plugin.selectedQuote());
     }
-    @Test public void renderComparisonOverlay() throws Exception
+    @Test public void emptyShopSlotsDoNotBlockMenuPrices()
     {
-        plugin.onMenuEntryAdded(new MenuEntryAdded(entry("Value")));
-        assertNotNull(plugin.selectedQuote());
-        assertNull(plugin.selectedQuote().problem);
-        ShopSaleValueOverlay overlay = new ShopSaleValueOverlay(plugin, config);
-        BufferedImage image = new BufferedImage(350,400,BufferedImage.TYPE_INT_ARGB);
-        Graphics2D graphics = image.createGraphics();
-        graphics.setFont(new Font("Arial",Font.PLAIN,12));
-        // RuneLite's PanelComponent reports the previous frame's cached dimensions.
-        overlay.render(graphics);
-        Dimension size = overlay.render(graphics);
-        graphics.dispose();
-        assertNotNull(size);
-        assertTrue(size.width <= 350 && size.height <= 400);
-        ImageIO.write(image.getSubimage(0,0,size.width,size.height),"png",new File("build/overlay-preview.png"));
-        assertTrue("Rendered size: " + size, size.height > 150);
+        Widget[] slots = new Widget[40];
+        slots[0] = shopItem;
+        for (int i = 1; i < slots.length; i++)
+        {
+            slots[i] = mock(Widget.class);
+            when(slots[i].getItemId()).thenReturn(0);
+            when(slots[i].getItemQuantity()).thenReturn(0);
+        }
+        when(plugin.client.getWidget(InterfaceID.Shopmain.ITEMS).getChildren()).thenReturn(slots);
+        MenuEntry entry = entry("Sell 5");
+        plugin.onMenuEntryAdded(new MenuEntryAdded(entry));
+        assertNull(plugin.quote(55).problem);
+        assertTrue(entry.getTarget().contains("84 gp [16 avg ea]"));
     }
 }

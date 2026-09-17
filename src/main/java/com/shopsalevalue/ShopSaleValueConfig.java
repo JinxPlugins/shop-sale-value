@@ -8,12 +8,15 @@ public interface ShopSaleValueConfig extends Config
     @ConfigItem(keyName="menu", name="Show menu prices", description="Add total GP and average GP each to Sell options", position=0)
     default boolean menu() { return true; }
 
-    @ConfigItem(keyName="panel", name="Show comparison overlay", description="Show the hovered inventory item's sale options while a shop is open", position=1)
+    @ConfigItem(keyName="panel", name="Show item prices", description="Show a white next-sale price above each sellable inventory item while a shop is open", position=1)
     default boolean panel() { return true; }
 
     @ConfigItem(keyName="customQuantity", name="Comparison quantity", description="Additional amount in the overlay; does not change Sell X", position=2)
     @Range(min=1, max=2147483647)
     default int customQuantity() { return 20; }
+
+    @ConfigItem(keyName="ctrlLookup", name="Ctrl+click price lookup", description="Hold Ctrl and click an inventory item for a local chat estimate at a normal general store. Replaces the item's normal click action.", position=3)
+    default boolean ctrlLookup() { return true; }
 
     @ConfigItem(keyName="overrideTitle", name="Custom shop title", description="Exact shop title to override. Leave blank for automatic detection. Custom rules apply only to this title.", position=10)
     default String overrideTitle() { return ""; }

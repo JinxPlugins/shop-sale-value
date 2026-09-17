@@ -22,6 +22,6 @@ final class Quote
         int n = quantity(requested);
         if (n == 0) return "No items";
         long total = total(n);
-        return String.format(Locale.US, "%,d gp [%,.2f ea]", total, total / (double) n);
+        return String.format(Locale.US, "%,d gp [%,d avg ea]", total, total / n);
     }
 }
