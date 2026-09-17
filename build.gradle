@@ -1,0 +1,42 @@
+plugins { id 'java' }
+
+group = 'com.shopsalevalue'
+version = '0.1.0'
+
+repositories {
+    maven { url = 'https://repo.runelite.net'; content { includeGroupByRegex('net\\.runelite.*') } }
+    mavenCentral()
+}
+
+def runeLiteVersion = '1.12.39'
+configurations { launcher }
+dependencies {
+    compileOnly "net.runelite:client:${runeLiteVersion}"
+    testImplementation "net.runelite:client:${runeLiteVersion}"
+    testImplementation "net.runelite:jshell:${runeLiteVersion}"
+    testImplementation 'junit:junit:4.13.2'
+    testImplementation 'org.mockito:mockito-core:4.11.0'
+    launcher "net.runelite:client:${runeLiteVersion}"
+    launcher "net.runelite:jshell:${runeLiteVersion}"
+}
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+    options.release.set(11)
+}
+tasks.register('run', JavaExec) {
+    dependsOn testClasses
+    classpath = sourceSets.main.output + sourceSets.test.output + configurations.launcher
+    mainClass = 'com.shopsalevalue.ShopSaleValueLauncher'
+    jvmArgs '-ea'
+    args '--developer-mode'
+}
+tasks.register('launcherJar', Jar) {
+    dependsOn testClasses
+    archiveClassifier.set('launcher')
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    manifest { attributes('Main-Class': 'com.shopsalevalue.ShopSaleValueLauncher', 'Multi-Release': 'true') }
+    from sourceSets.main.output
+    from(sourceSets.test.output) { include '**/ShopSaleValueLauncher.class' }
+    from { configurations.launcher.collect { it.isDirectory() ? it : zipTree(it) } }
+    exclude 'META-INF/INDEX.LIST', 'META-INF/*.SF', 'META-INF/*.DSA', 'META-INF/*.RSA', '**/module-info.class'
+}
